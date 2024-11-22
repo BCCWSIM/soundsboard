@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Audio Buttons</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .button-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 20px;
+        }
+
+        .button-container button {
+            padding: 10px 20px;
+            margin: 10px;
+            cursor: pointer;
+            font-size: 18px;
+            background-color: #4CAF50; /* Default green (disengaged) */
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+
+        .button-container button:hover {
+            background-color: #45a049;
+        }
+
+        .button-container button.loop {
+            background-color: #FF6347; /* Red for loop mode */
+        }
+
+        .button-container button.background-loop {
+            background-color: #FFD700; /* Yellow for background loop */
+        }
+    </style>
+</head>
+<body>
+    <h1>Dynamic Audio Buttons</h1>
+    <div id="buttonContainer" class="button-container"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const buttonContainer = document.getElementById('buttonContainer');
+            const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT76x95PKMFFRDKwAjmhnqC0oZNgQRfd93u83EDt6N3M-ntzUEo7ppWcsgrAlm88WAIGAZWb5FtxPsP/pub?output=csv';
+
+            // Fetch the CSV data
+            fetch(csvUrl)
+                .then(response => response.text())
+                .then(csvData => {
+                    const rows = parseCSV(csvData);
+                    createAudioButtons(rows);
+                })
+                .catch(error => console.error('Error fetching CSV:', error));
+
+            // Function to parse CSV data into an array
+            function parseCSV(csvData) {
+                const rows = csvData.trim().split('\n').slice(1); // Remove the header row
+                return rows
+                    .map(row => {
+                        const [name, audioUrl] = row.split(',').map(cell => cell.trim().replace(/^"|"$/g, ''));
+                        return name && audioUrl ? [name, audioUrl] : null;
+                    })
+                    .filter(row => row !== null); // Filter out any invalid rows
+            }
+
+            // Store currently playing audio, background loop audio, and looped audio
+            let currentAudio = null;
+            let currentButton = null;
+            let backgroundLoopAudio = []; // Store multiple background loops (yellow buttons)
+            let loopingAudio = null; // Store the one audio that is looping (red button)
+
+            // Function to create buttons dynamically from the CSV data
+            function createAudioButtons(rows) {
+                rows.forEach(([name, audioUrl]) => {
+                    const button = document.createElement('button');
+                    button.textContent = name; // Set button label
+                    let audio = new Audio(audioUrl); // Create an audio element
+
+                    // Handle single click to stop looping (if any) and start new audio
+                    button.addEventListener('click', () => {
+                        // If the button is already yellow or red, prevent action
+                        if (button.classList.contains('background-loop') || button.classList.contains('loop')) {
+                            return;
+                        }
+
+                        // Stop any audio currently playing (unless it's from a background loop button)
+                        if (currentAudio && currentAudio !== audio && !backgroundLoopAudio.includes(audio)) {
+                            currentAudio.pause();
+                            currentAudio.currentTime = 0;
+                        }
+
+                        // Reset any currently red button to green
+                        resetRedButton();
+
+                        // Play the new audio
+                        audio.loop = false; // No looping for a single click
+                        audio.play();
+
+                        // Update current audio and button
+                        currentAudio = audio;
+                        currentButton = button;
+                    });
+
+                    // Handle double-click to toggle loop
+                    button.addEventListener('dblclick', () => {
+                        // If it's a yellow button (background loop), stop it and return to green
+                        if (button.classList.contains('background-loop')) {
+                            stopBackgroundLoop(button, audio);
+                        } 
+                        // If it's a red button (looping), stop it and return to green
+                        else if (button.classList.contains('loop')) {
+                            stopLoop(button, audio);
+                        } 
+                        // If it's green, turn it red and start looping
+                        else {
+                            startLoop(button, audio);
+                        }
+
+                        // Update current audio and button
+                        currentAudio = audio;
+                        currentButton = button;
+                    });
+
+                    // Handle long-click to enable background looping
+                    let clickTimer = null;
+                    button.addEventListener('mousedown', () => {
+                        clickTimer = setTimeout(() => {
+                            // Long press detected, enable background loop for red button
+                            if (button.classList.contains('loop')) {
+                                startBackgroundLoop(button, audio);
+                            }
+                            // If the button is not yet red, long press it to go to yellow
+                            else if (!button.classList.contains('background-loop')) {
+                                startBackgroundLoop(button, audio);
+                            }
+
+                            // Update current audio and button
+                            currentAudio = audio;
+                            currentButton = button;
+                        }, 1000); // 1 second delay for long click
+                    });
+
+                    button.addEventListener('mouseup', () => {
+                        // If mouseup occurs before long-click, clear the timer
+                        clearTimeout(clickTimer);
+                    });
+
+                    button.addEventListener('mouseleave', () => {
+                        // If the mouse leaves before the long-click, clear the timer
+                        clearTimeout(clickTimer);
+                    });
+
+                    buttonContainer.appendChild(button); // Add button to the container
+                });
+            }
+
+            // Function to reset any currently red button back to green before playing a new audio
+            function resetRedButton() {
+                const buttons = document.querySelectorAll('.button-container button');
+                buttons.forEach(button => {
+                    if (button.classList.contains('loop')) {
+                        stopLoop(button, button.audio);
+                    }
+                });
+            }
+
+            // Start the loop (turn button red)
+            function startLoop(button, audio) {
+                // Stop any existing red button audio before starting new loop
+                if (loopingAudio && loopingAudio !== audio) {
+                    stopLoop(currentButton, loopingAudio);
+                }
+
+                audio.loop = true;
+                audio.play();
+                button.classList.add('loop'); // Change color to red for loop
+                button.style.backgroundColor = "#FF6347"; // Red
+                loopingAudio = audio; // Set this as the looping audio
+            }
+
+            // Stop the loop (return button to green)
+            function stopLoop(button, audio) {
+                audio.loop = false;
+                audio.pause();
+                audio.currentTime = 0; // Reset the audio
+                button.classList.remove('loop'); // Reset color to green
+                button.style.backgroundColor = "#4CAF50"; // Green
+                if (loopingAudio === audio) {
+                    loopingAudio = null; // Clear the looping audio reference
+                }
+            }
+
+            // Start the background loop (turn button yellow)
+            function startBackgroundLoop(button, audio) {
+                // If it's already in the background loop list, just return (no re-engagement)
+                if (backgroundLoopAudio.includes(audio)) {
+                    return;
+                }
+
+                audio.loop = true; // Enable loop
+                audio.play(); // Start playing the audio
+                button.classList.add('background-loop'); // Change color for background loop
+                button.style.backgroundColor = "#FFD700"; // Yellow
+                backgroundLoopAudio.push(audio); // Add to the background loop list
+            }
+
+            // Stop the background loop (return button to green)
+            function stopBackgroundLoop(button, audio) {
+                audio.pause();
+                audio.currentTime = 0; // Reset the background loop
+                button.classList.remove('background-loop');
+                button.style.backgroundColor = "#4CAF50"; // Turn back to green
+
+                // Remove audio from the background loop list
+                backgroundLoopAudio = backgroundLoopAudio.filter(item => item !== audio);
+            }
+        });
+    </script>
+</body>
+</html>
