@@ -50,27 +50,13 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const buttonContainer = document.getElementById('buttonContainer');
-            const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT76x95PKMFFRDKwAjmhnqC0oZNgQRfd93u83EDt6N3M-ntzUEo7ppWcsgrAlm88WAIGAZWb5FtxPsP/pub?output=csv';
 
-            // Fetch the CSV data
-            fetch(csvUrl)
-                .then(response => response.text())
-                .then(csvData => {
-                    const rows = parseCSV(csvData);
-                    createAudioButtons(rows);
-                })
-                .catch(error => console.error('Error fetching CSV:', error));
-
-            // Function to parse CSV data into an array
-            function parseCSV(csvData) {
-                const rows = csvData.trim().split('\n').slice(1); // Remove the header row
-                return rows
-                    .map(row => {
-                        const [name, audioUrl] = row.split(',').map(cell => cell.trim().replace(/^"|"$/g, ''));
-                        return name && audioUrl ? [name, audioUrl] : null;
-                    })
-                    .filter(row => row !== null); // Filter out any invalid rows
-            }
+            // Local audio files within the "sounds" directory
+            const audioFiles = [
+                { name: "Gasp 1", audioUrl: "sounds/EOLGasp1.mp3" },
+                { name: "Gasp 2", audioUrl: "sounds/EOLGasp2" },
+                { name: "Moan 1", audioUrl: "sounds/EOLMoan1" }
+            ];
 
             // Store currently playing audio, background loop audio, and looped audio
             let currentAudio = null;
@@ -78,9 +64,9 @@
             let backgroundLoopAudio = []; // Store multiple background loops (yellow buttons)
             let loopingAudio = null; // Store the one audio that is looping (red button)
 
-            // Function to create buttons dynamically from the CSV data
-            function createAudioButtons(rows) {
-                rows.forEach(([name, audioUrl]) => {
+            // Function to create buttons dynamically from the audio files
+            function createAudioButtons() {
+                audioFiles.forEach(({ name, audioUrl }) => {
                     const button = document.createElement('button');
                     button.textContent = name; // Set button label
                     let audio = new Audio(audioUrl); // Create an audio element
@@ -223,6 +209,8 @@
                 // Remove audio from the background loop list
                 backgroundLoopAudio = backgroundLoopAudio.filter(item => item !== audio);
             }
+
+            createAudioButtons(); // Call the function to create buttons
         });
     </script>
 </body>
